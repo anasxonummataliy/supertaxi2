@@ -1,10 +1,9 @@
 import asyncio
 import logging
-import os
+from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
+env_path = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 from aiogram import Bot, Dispatcher, Router
 from aiogram.types import Message, CallbackQuery

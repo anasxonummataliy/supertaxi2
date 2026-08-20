@@ -10,7 +10,7 @@ ExecStart=/root/supertaxi2/.venv/bin/python main.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/root/supertaxi2/.env
 
 [Install]
 WantedBy=multi-user.target
-
