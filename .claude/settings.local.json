@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(sshpass -p '4DbAPt4mZkjAx6l' scp -o StrictHostKeyChecking=no database/db.py states/forms.py keyboards/inline.py handlers/broadcast.py services/broadcaster.py root@152.53.107.168:/www/wwwroot/supertaxi/)",
+      "Bash(sshpass:*)"
+    ]
+  }
+}
