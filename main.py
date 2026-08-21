@@ -31,17 +31,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+from aiogram.client.session.aiohttp import AiohttpSession
+
 async def main():
     await init_db()
     await reset_running_tasks()
 
+    session = AiohttpSession(timeout=60.0)
     bot = Bot(
         token=os.getenv("BOT_TOKEN"),
+        session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = Dispatcher(storage=MemoryStorage())
 
-    broadcast_manager = BroadcastManager()
+    broadcast_manager = BroadcastManager(bot=bot)
     dp["broadcast_manager"] = broadcast_manager
 
     dp.include_router(menu.router)
@@ -88,9 +92,33 @@ async def main():
 
     dp.include_router(fallback_router)
 
+    @dp.error()
+    async def global_error_handler(event):
+        exc = event.exception
+        from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
+
+        if isinstance(exc, TelegramBadRequest) and "message is not modified" in str(exc).lower():
+            if event.update and event.update.callback_query:
+                try:
+                    await event.update.callback_query.answer()
+                except Exception:
+                    pass
+            return True
+
+        if isinstance(exc, TelegramNetworkError):
+            logger.warning(f"Telegram tarmoq xatosi / timeout: {exc}")
+            return True
+
+        logger.error(f"Kutilmagan xatolik: {exc}", exc_info=exc)
+        return True
+
     logger.info("Bot ishga tushdi")
     try:
-        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+        await dp.start_polling(
+            bot,
+            polling_timeout=30,
+            allowed_updates=dp.resolve_used_update_types(),
+        )
     finally:
         await bot.session.close()
 

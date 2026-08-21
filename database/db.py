@@ -29,12 +29,19 @@ async def init_db():
                 message_text TEXT NOT NULL,
                 account_ids TEXT NOT NULL,
                 group_ids TEXT NOT NULL,
-                interval_minutes INTEGER NOT NULL,
+                interval_seconds INTEGER NOT NULL DEFAULT 30,
+                interval_minutes INTEGER DEFAULT 1,
                 stagger_seconds INTEGER NOT NULL DEFAULT 60,
                 status TEXT NOT NULL DEFAULT 'stopped',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        try:
+            await db.execute(
+                "ALTER TABLE broadcast_tasks ADD COLUMN interval_seconds INTEGER NOT NULL DEFAULT 30"
+            )
+        except Exception:
+            pass
         try:
             await db.execute(
                 "ALTER TABLE broadcast_tasks ADD COLUMN stagger_seconds INTEGER NOT NULL DEFAULT 60"
@@ -140,15 +147,23 @@ async def create_broadcast_task(
     message_text: str,
     account_ids: list,
     group_ids: list,
-    interval_minutes: int,
+    interval_seconds: int = 30,
+    interval_minutes: int = 1,
     stagger_seconds: int = 60,
 ) -> int:
     async with aiosqlite.connect(DB_PATH) as db:
         cur = await db.execute(
             "INSERT INTO broadcast_tasks "
-            "(message_text, account_ids, group_ids, interval_minutes, stagger_seconds, status) "
-            "VALUES (?, ?, ?, ?, ?, 'stopped')",
-            (message_text, json.dumps(account_ids), json.dumps(group_ids), interval_minutes, stagger_seconds),
+            "(message_text, account_ids, group_ids, interval_seconds, interval_minutes, stagger_seconds, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'stopped')",
+            (
+                message_text,
+                json.dumps(account_ids),
+                json.dumps(group_ids),
+                interval_seconds,
+                interval_minutes,
+                stagger_seconds,
+            ),
         )
         await db.commit()
         return cur.lastrowid

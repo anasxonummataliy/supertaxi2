@@ -11,11 +11,42 @@ logger = logging.getLogger(__name__)
 _POLL_INTERVAL = 5.0
 
 
+def _format_send_error(e: Exception) -> str:
+    err_str = str(e)
+    err_lower = err_str.lower()
+    if "chatwriteforbidden" in err_lower or "cannot write" in err_lower or "write forbidden" in err_lower:
+        return "Guruhda a'zolarga xabar yozish ruxsati yo'q (yopilgan)"
+    if "userbannedinchannel" in err_lower or "banned" in err_lower or "restricted" in err_lower:
+        return "Akkaunt bu guruhda bloklangan (ban qilingan)"
+    if "slowmodewait" in err_lower:
+        return f"Guruhda sekin rejim (Slowmode) yoqilgan"
+    if "floodwait" in err_lower:
+        return f"Telegram cheklovi (FloodWait: biroz kutish kerak)"
+    if "session" in err_lower or "deauthorized" in err_lower or "invalidated" in err_lower:
+        return "Akkaunt sessiyasi bekor qilingan (chiqib ketilgan)"
+    if "channelprivate" in err_lower or "chatidinvalid" in err_lower or "could not find" in err_lower:
+        return "Guruh topilmadi yoki unga kirish imkoni yo'q"
+    return err_str
+
+
 class BroadcastManager:
-    def __init__(self):
+    def __init__(self, bot=None):
+        self.bot = bot
         self._tasks: dict[int, asyncio.Task] = {}
         self._next_send_time: dict[int, dict[int, float]] = {}
         self._last_sent_time: dict[int, dict[int, float]] = {}
+
+    async def _notify_admins(self, text: str):
+        if not self.bot:
+            return
+        import os
+        raw = os.getenv("ADMIN_IDS", "")
+        admin_ids = [int(x.strip()) for x in raw.split(",") if x.strip().isdigit()]
+        for admin_id in admin_ids:
+            try:
+                await self.bot.send_message(admin_id, text, parse_mode="HTML")
+            except Exception as ex:
+                logger.warning(f"Admin {admin_id} ga xabar yuborishda xatolik: {ex}")
 
     def _mono_to_wall(self, mono: float) -> datetime:
         wall = time.time() + (mono - asyncio.get_event_loop().time())
@@ -98,8 +129,8 @@ class BroadcastManager:
 
                 account_ids = json.loads(task_data["account_ids"])
                 group_ids = json.loads(task_data["group_ids"])
-                interval_sec = task_data["interval_minutes"] * 60
-                stagger_sec = task_data.get("stagger_seconds", 60)
+                cycle_sec = task_data.get("interval_minutes", 6) * 60
+                stagger_sec = task_data.get("stagger_seconds", 30)
                 message_text = task_data["message_text"]
 
                 accounts: list[dict] = []
@@ -121,16 +152,28 @@ class BroadcastManager:
                     await asyncio.sleep(30)
                     continue
 
+                # Remove inactive/removed accounts from schedule
+                active_ids = {acc["id"] for acc in accounts}
+                for dead_id in list(schedule.keys()):
+                    if dead_id not in active_ids:
+                        schedule.pop(dead_id, None)
+
                 now = asyncio.get_event_loop().time()
 
+                # Initialize schedule for new accounts with stagger_sec spacing
                 for idx, acc in enumerate(accounts):
                     if acc["id"] not in schedule:
-                        schedule[acc["id"]] = now + idx * stagger_sec
+                        if not schedule:
+                            schedule[acc["id"]] = now
+                        else:
+                            schedule[acc["id"]] = max(schedule.values()) + stagger_sec
 
+                # Find due accounts sorted by scheduled time
                 due_accounts = [
                     acc for acc in accounts
-                    if schedule.get(acc["id"], 0) <= asyncio.get_event_loop().time()
+                    if schedule.get(acc["id"], float("inf")) <= asyncio.get_event_loop().time()
                 ]
+                due_accounts.sort(key=lambda acc: schedule.get(acc["id"], 0))
 
                 if not due_accounts:
                     earliest = min(schedule[acc["id"]] for acc in accounts)
@@ -138,56 +181,94 @@ class BroadcastManager:
                     await asyncio.sleep(wait)
                     continue
 
-                for account in due_accounts:
+                account = due_accounts[0]
+
+                status_check = await db.get_broadcast_task(task_id)
+                if not status_check or status_check["status"] == "stopped":
+                    return
+
+                while status_check and status_check["status"] == "paused":
+                    await asyncio.sleep(_POLL_INTERVAL)
                     status_check = await db.get_broadcast_task(task_id)
                     if not status_check or status_check["status"] == "stopped":
                         return
 
-                    while status_check and status_check["status"] == "paused":
+                logger.info(
+                    f"[{task_id}] {account['phone']} barcha tanlangan guruhlarga ({len(groups)} ta) xabar yuborishni boshladi..."
+                )
+
+                # Send message to all groups for this account in one continuous batch
+                for group in groups:
+                    # Check task status before each group
+                    curr_task = await db.get_broadcast_task(task_id)
+                    if not curr_task or curr_task["status"] == "stopped":
+                        return
+                    while curr_task and curr_task["status"] == "paused":
                         await asyncio.sleep(_POLL_INTERVAL)
-                        status_check = await db.get_broadcast_task(task_id)
-                        if not status_check or status_check["status"] == "stopped":
+                        curr_task = await db.get_broadcast_task(task_id)
+                        if not curr_task or curr_task["status"] == "stopped":
                             return
 
-                    for group in groups:
-                        try:
-                            await tm.ensure_membership(
-                                account["session_string"],
-                                account["phone"],
-                                group["group_id"],
-                                group.get("username"),
-                            )
-                            await tm.send_message_to_group(
-                                account["session_string"],
-                                account["phone"],
-                                group["group_id"],
-                                message_text,
-                                group.get("username"),
-                            )
-                            logger.info(
-                                f"[{task_id}] {account['phone']} -> {group['title']}: yuborildi"
-                            )
-                            await asyncio.sleep(3)
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as e:
-                            logger.error(
-                                f"[{task_id}] Xatolik {account['phone']} -> {group['title']}: {e}"
-                            )
-
-                    last_sent[account["id"]] = asyncio.get_event_loop().time()
-                    next_time = asyncio.get_event_loop().time() + interval_sec
-                    schedule[account["id"]] = next_time
                     try:
-                        await tm.disconnect_client(account["phone"])
-                    except Exception as _e:
-                        logger.warning(f"[{task_id}] disconnect xatosi {account['phone']}: {_e}")
-                    logger.info(
-                        f"[{task_id}] {account['phone']} tarqatdi, disconnect qilindi. "
-                        f"Keyingisi {task_data['interval_minutes']} daqiqadan keyin."
-                    )
+                        await tm.ensure_membership(
+                            account["session_string"],
+                            account["phone"],
+                            group["group_id"],
+                            group.get("username"),
+                        )
+                        await tm.send_message_to_group(
+                            account["session_string"],
+                            account["phone"],
+                            group["group_id"],
+                            message_text,
+                            group.get("username"),
+                        )
+                        logger.info(
+                            f"[{task_id}] {account['phone']} -> {group['title']}: yuborildi"
+                        )
+                        await asyncio.sleep(1)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        err_reason = _format_send_error(e)
+                        logger.error(
+                            f"[{task_id}] Xatolik {account['phone']} -> {group['title']}: {e}"
+                        )
+                        un_str = f" (@{group['username']})" if group.get("username") else ""
+                        notify_msg = (
+                            f"⚠️ <b>Guruhga xabar yuborilmadi!</b>\n\n"
+                            f"📢 <b>Tarqatish:</b> #{task_id}\n"
+                            f"👤 <b>Akkaunt:</b> <code>{account['phone']}</code>\n"
+                            f"🏘 <b>Guruh:</b> <b>{group['title']}</b>{un_str}\n"
+                            f"❌ <b>Sabab:</b> <i>{err_reason}</i>"
+                        )
+                        await self._notify_admins(notify_msg)
 
-                await asyncio.sleep(1)
+                finish_time = asyncio.get_event_loop().time()
+                last_sent[account["id"]] = finish_time
+
+                # Next run for this account:
+                # 1. At least cycle_sec (e.g. 6 min) from its own finish time
+                # 2. Spaced at least stagger_sec after the last scheduled account in the queue
+                other_times = [t for a_id, t in schedule.items() if a_id != account["id"]]
+                if other_times:
+                    min_after_others = max(other_times) + stagger_sec
+                    schedule[account["id"]] = max(finish_time + cycle_sec, min_after_others)
+                else:
+                    schedule[account["id"]] = finish_time + cycle_sec
+
+                try:
+                    await tm.disconnect_client(account["phone"])
+                except Exception as _e:
+                    logger.warning(f"[{task_id}] disconnect xatosi {account['phone']}: {_e}")
+
+                next_wall = self._mono_to_wall(schedule[account["id"]]).strftime("%H:%M:%S")
+                logger.info(
+                    f"[{task_id}] {account['phone']} barcha guruhlarga yubordi. "
+                    f"Keyingi navbati {task_data.get('interval_minutes', 6)} daqiqadan so'ng ({next_wall}) bo'ladi."
+                )
+
+                await asyncio.sleep(0.5)
 
         except asyncio.CancelledError:
             logger.info(f"Broadcast {task_id} bekor qilindi")

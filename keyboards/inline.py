@@ -169,7 +169,7 @@ def interval_keyboard(minutes: int = 6):
     b = InlineKeyboardBuilder()
     b.button(text="-10", callback_data="bcast_intstep_-10")
     b.button(text="-1", callback_data="bcast_intstep_-1")
-    b.button(text=f"⏱ {minutes} minut", callback_data="bcast_intstep_noop")
+    b.button(text=f"⏱ {minutes} daqiqa", callback_data="bcast_intstep_noop")
     b.button(text="+1", callback_data="bcast_intstep_+1")
     b.button(text="+10", callback_data="bcast_intstep_+10")
     b.button(text="✅ Tasdiqlash", callback_data="bcast_intstep_confirm")
@@ -178,16 +178,23 @@ def interval_keyboard(minutes: int = 6):
     return b.as_markup()
 
 
-def stagger_keyboard(seconds: int):
+def stagger_keyboard(seconds: int = 30):
     b = InlineKeyboardBuilder()
-    b.button(text="-10", callback_data="bcast_stagger_-10")
-    b.button(text="-1", callback_data="bcast_stagger_-1")
-    b.button(text=f"⏱ {seconds} sek", callback_data="bcast_stagger_noop")
-    b.button(text="+1", callback_data="bcast_stagger_+1")
-    b.button(text="+10", callback_data="bcast_stagger_+10")
+    b.button(text="-30s", callback_data="bcast_stagger_-30")
+    b.button(text="-10s", callback_data="bcast_stagger_-10")
+    b.button(text=f"⏳ {seconds} sek", callback_data="bcast_stagger_noop")
+    b.button(text="+10s", callback_data="bcast_stagger_+10")
+    b.button(text="+30s", callback_data="bcast_stagger_+30")
+
+    b.button(text="-5s", callback_data="bcast_stagger_-5")
+    b.button(text="-1s", callback_data="bcast_stagger_-1")
+    b.button(text="🔄 30s", callback_data="bcast_stagger_set30")
+    b.button(text="+1s", callback_data="bcast_stagger_+1")
+    b.button(text="+5s", callback_data="bcast_stagger_+5")
+
     b.button(text="✅ Tasdiqlash", callback_data="bcast_stagger_confirm")
     b.button(text="🔙 Orqaga", callback_data="bcast_select_interval")
-    b.adjust(5, 1, 1)
+    b.adjust(5, 5, 1, 1)
     return b.as_markup()
 
 
@@ -238,8 +245,10 @@ def broadcast_list_keyboard(tasks: list):
     emoji_map = {"running": "🟢", "paused": "🟡", "stopped": "🔴"}
     for t in tasks:
         e = emoji_map.get(t["status"], "⚪")
+        interval_min = t.get("interval_minutes", 6)
+        stagger_sec = t.get("stagger_seconds", 30)
         b.button(
-            text=f"{e} #{t['id']} | {t['interval_minutes']}daq",
+            text=f"{e} #{t['id']} | {interval_min}daq ({stagger_sec}s)",
             callback_data=f"bcast_view_{t['id']}",
         )
     b.button(text="🔙 Orqaga", callback_data="menu_broadcast")

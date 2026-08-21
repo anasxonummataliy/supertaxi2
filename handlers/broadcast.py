@@ -79,14 +79,14 @@ def _build_broadcast_task_text(task_id: int, task: dict) -> str:
     short_msg = task["message_text"][:80] + (
         "..." if len(task["message_text"]) > 80 else ""
     )
-    stagger = task.get("stagger_seconds", 60)
+    stagger = task.get("stagger_seconds", 30)
     return (
         f"📢 <b>Tarqatish #{task_id}</b>\n\n"
         f"📝 Xabar: <i>{short_msg}</i>\n"
         f"👥 Akkauntlar: {len(account_ids)} ta\n"
         f"🏘 Guruhlar: {len(group_ids)} ta\n"
-        f"⏱ Interval: {task['interval_minutes']} daqiqa\n"
-        f"⏳ Stagger: {stagger} sek\n"
+        f"⏱ Qayta yuborish: {task.get('interval_minutes', 6)} daqiqa\n"
+        f"⏳ Akkauntlar orasi: {stagger} sek\n"
         f"📊 Holat: {status_map.get(task['status'], task['status'])}\n"
         f"📅 Yaratilgan: {task['created_at']}"
     )
@@ -116,10 +116,11 @@ def _build_stats_text(task_id: int, task: dict, stats: list[dict]) -> str:
         "paused": "🟡 Kutmoqda",
         "stopped": "🔴 To'xtatilgan",
     }
+    stagger = task.get("stagger_seconds", 30)
     lines = [
         f"📊 <b>Tarqatish #{task_id} — Statistika</b>",
         f"📌 Holat: {status_map.get(task['status'], task['status'])}",
-        f"⏱ Interval: {task['interval_minutes']} daqiqa",
+        f"⏱ Qayta yuborish: {task.get('interval_minutes', 6)} daqiqa | Akkauntlar orasi: {stagger} sek",
         "",
     ]
     for i, s in enumerate(stats, 1):
@@ -452,8 +453,9 @@ async def cb_grp_confirm(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastStates.selecting_interval)
 
     await callback.message.edit_text(
-        "⏱ <b>Akkauntlar orasidagi intervalni tanlang (minutda):</b>\n\n"
-        "Tugmalar orqali intervalni o'zgartiring yoki chatda minut sonini yozib yuborishingiz mumkin:",
+        "⏱ <b>Qayta yuborish intervalini tanlang (daqiqada):</b>\n\n"
+        "Har bir akkaunt barcha tanlangan guruhlarga xabar yuborib bo'lgach, yana qaytadan xabar yuborishi uchun kutiladigan vaqt (masalan: 6 daqiqa).\n\n"
+        "Tugmalar orqali o'zgartiring yoki chatga daqiqa sonini yozib yuborishingiz mumkin:",
         reply_markup=interval_keyboard(interval),
         parse_mode="HTML",
     )
@@ -483,11 +485,14 @@ async def cb_adjust_interval_minutes(callback: CallbackQuery, state: FSMContext)
     current = int(data.get("interval_minutes", 6))
 
     if action == "confirm":
-        stagger = int(data.get("stagger_seconds", 60))
+        stagger = int(data.get("stagger_seconds", 30))
+        await state.update_data(interval_minutes=current, stagger_seconds=stagger)
         await state.set_state(BroadcastStates.selecting_stagger)
         await callback.message.edit_text(
-            f"✅ Interval <b>{current} minut</b> qilib belgilandi!\n\n"
-            "⏱ Guruhlar orasidagi kutish vaqtini tanlang <i>(har bir guruhga xabar orasidagi interval)</i>:",
+            f"✅ Qayta yuborish intervali: <b>{current} daqiqa</b> qilib belgilandi!\n\n"
+            "⏳ <b>Akkauntlar orasidagi kutish vaqtini tanlang (sekundda):</b>\n\n"
+            "Bitta akkaunt barcha guruhlarga yuborib bo'lgach, keyingi akkaunt boshlashigacha kutiladigan vaqt (masalan: 30 sekund):\n\n"
+            "Tugmalar orqali o'zgartiring yoki chatga sekund sonini (masalan: <code>30</code>) yozing:",
             reply_markup=stagger_keyboard(stagger),
             parse_mode="HTML",
         )
@@ -513,18 +518,20 @@ async def msg_custom_interval(message: Message, state: FSMContext):
     text = message.text.strip()
     if not text.isdigit() or int(text) <= 0:
         await message.answer(
-            "⚠️ Iltimos, intervalni musbat butun son sifatida kiriting (masalan: <b>6</b> yoki <b>15</b>).",
+            "⚠️ Iltimos, intervalni musbat butun son sifatida (daqiqada) kiriting (masalan: <b>6</b> yoki <b>15</b>).",
             parse_mode="HTML"
         )
         return
 
     interval = int(text)
-    stagger = int((await state.get_data()).get("stagger_seconds", 60))
+    stagger = int((await state.get_data()).get("stagger_seconds", 30))
     await state.update_data(interval_minutes=interval, stagger_seconds=stagger)
     await state.set_state(BroadcastStates.selecting_stagger)
     await message.answer(
-        f"✅ Interval <b>{interval} minut</b> qilib belgilandi!\n\n"
-        "⏱ Guruhlar orasidagi kutish vaqtini tanlang <i>(har bir guruhga xabar orasidagi interval)</i>:",
+        f"✅ Qayta yuborish intervali: <b>{interval} daqiqa</b> qilib belgilandi!\n\n"
+        "⏳ <b>Akkauntlar orasidagi kutish vaqtini tanlang (sekundda):</b>\n\n"
+        "Bitta akkaunt barcha guruhlarga yuborib bo'lgach, keyingi akkaunt boshlashigacha kutiladigan vaqt (masalan: 30 sekund):\n\n"
+        "Tugmalar orqali o'zgartiring yoki chatga sekund sonini (masalan: <code>30</code>) yozing:",
         reply_markup=stagger_keyboard(stagger),
         parse_mode="HTML",
     )
@@ -538,8 +545,9 @@ async def cb_back_to_interval(callback: CallbackQuery, state: FSMContext):
     interval = int(data.get("interval_minutes", 6))
     await state.set_state(BroadcastStates.selecting_interval)
     await callback.message.edit_text(
-        "⏱ <b>Akkauntlar orasidagi intervalni tanlang (minutda):</b>\n\n"
-        "Tugmalar orqali intervalni o'zgartiring yoki chatda minut sonini yozib yuborishingiz mumkin:",
+        "⏱ <b>Qayta yuborish intervalini tanlang (daqiqada):</b>\n\n"
+        "Har bir akkaunt barcha tanlangan guruhlarga xabar yuborib bo'lgach, yana qaytadan xabar yuborishi uchun kutiladigan vaqt (masalan: 6 daqiqa).\n\n"
+        "Tugmalar orqali o'zgartiring yoki chatga daqiqa sonini yozib yuborishingiz mumkin:",
         reply_markup=interval_keyboard(interval),
         parse_mode="HTML",
     )
@@ -555,15 +563,24 @@ async def cb_adjust_stagger(callback: CallbackQuery, state: FSMContext):
     if action == "noop":
         await callback.answer()
         return
+
+    data = await state.get_data()
+    current = int(data.get("stagger_seconds", 30))
+
     if action == "confirm":
-        data = await state.get_data()
         selected_accounts = list(data.get("selected_accounts", []))
         selected_groups = list(data.get("selected_groups", []))
         message_text = data.get("message_text", "")
-        interval = data.get("interval_minutes", 10)
-        stagger = data.get("stagger_seconds", 60)
+        interval_minutes = int(data.get("interval_minutes", 6))
+        stagger_seconds = current
+
         task_id = await db.create_broadcast_task(
-            message_text, selected_accounts, selected_groups, interval, stagger
+            message_text=message_text,
+            account_ids=selected_accounts,
+            group_ids=selected_groups,
+            interval_minutes=interval_minutes,
+            stagger_seconds=stagger_seconds,
+            interval_seconds=interval_minutes * 60,
         )
         await state.clear()
         text = (
@@ -571,8 +588,8 @@ async def cb_adjust_stagger(callback: CallbackQuery, state: FSMContext):
             f"🆔 ID: <code>{task_id}</code>\n"
             f"👥 Akkauntlar: {len(selected_accounts)} ta\n"
             f"🏘 Guruhlar: {len(selected_groups)} ta\n"
-            f"⏱ Interval: {interval} daqiqa\n"
-            f"⏳ Stagger: {stagger} sek\n"
+            f"⏱ Qayta yuborish: {interval_minutes} daqiqa\n"
+            f"⏳ Akkauntlar orasi: {stagger_seconds} sek\n"
             f"📊 Holat: 🔴 To'xtatilgan\n\n"
             f"Boshlash uchun ▶️ tugmasini bosing."
         )
@@ -583,15 +600,65 @@ async def cb_adjust_stagger(callback: CallbackQuery, state: FSMContext):
         )
         await callback.answer()
         return
-    delta = int(action)
-    data = await state.get_data()
-    current = data.get("stagger_seconds", 60)
-    new_val = max(1, current + delta)
+
+    if action == "set30":
+        new_val = 30
+    else:
+        delta = int(action)
+        new_val = max(1, current + delta)
+
+    if new_val == current:
+        await callback.answer()
+        return
+
     await state.update_data(stagger_seconds=new_val)
     await callback.message.edit_reply_markup(
         reply_markup=stagger_keyboard(new_val)
     )
     await callback.answer()
+
+
+@router.message(StateFilter(BroadcastStates.selecting_stagger))
+async def msg_custom_stagger(message: Message, state: FSMContext):
+    text = message.text.strip()
+    if not text.isdigit() or int(text) <= 0:
+        await message.answer(
+            "⚠️ Iltimos, kutish vaqtini musbat butun son sifatida (sekundda) kiriting (masalan: <b>30</b> yoki <b>45</b>).",
+            parse_mode="HTML"
+        )
+        return
+
+    stagger_seconds = int(text)
+    data = await state.get_data()
+    selected_accounts = list(data.get("selected_accounts", []))
+    selected_groups = list(data.get("selected_groups", []))
+    message_text = data.get("message_text", "")
+    interval_minutes = int(data.get("interval_minutes", 6))
+
+    task_id = await db.create_broadcast_task(
+        message_text=message_text,
+        account_ids=selected_accounts,
+        group_ids=selected_groups,
+        interval_minutes=interval_minutes,
+        stagger_seconds=stagger_seconds,
+        interval_seconds=interval_minutes * 60,
+    )
+    await state.clear()
+    text = (
+        f"✅ <b>Tarqatish yaratildi!</b>\n\n"
+        f"🆔 ID: <code>{task_id}</code>\n"
+        f"👥 Akkauntlar: {len(selected_accounts)} ta\n"
+        f"🏘 Guruhlar: {len(selected_groups)} ta\n"
+        f"⏱ Qayta yuborish: {interval_minutes} daqiqa\n"
+        f"⏳ Akkauntlar orasi: {stagger_seconds} sek\n"
+        f"📊 Holat: 🔴 To'xtatilgan\n\n"
+        f"Boshlash uchun ▶️ tugmasini bosing."
+    )
+    await message.answer(
+        text,
+        reply_markup=broadcast_control_keyboard(task_id, "stopped"),
+        parse_mode="HTML",
+    )
 
 
 @router.callback_query(F.data.startswith("bcast_delete_") & ~F.data.startswith("bcast_delete_confirm_"))
