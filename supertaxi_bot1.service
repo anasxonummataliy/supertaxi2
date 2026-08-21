@@ -1,0 +1,15 @@
+[Unit]
+Description=SuperTaxi Bot 1 Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/supertaxi2
+ExecStart=/root/supertaxi2/.venv/bin/python main.py .env.bot1
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
