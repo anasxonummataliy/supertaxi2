@@ -1,11 +1,14 @@
 import json
+import os
 import aiosqlite
 
-DB_PATH = "bot.db"
+
+def get_db_path() -> str:
+    return os.getenv("DB_PATH", "bot.db")
 
 
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -52,7 +55,7 @@ async def init_db():
 
 
 async def reset_running_tasks():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(
             "UPDATE broadcast_tasks SET status = 'stopped' WHERE status IN ('running', 'paused')"
         )
@@ -60,14 +63,14 @@ async def reset_running_tasks():
 
 
 async def get_all_accounts() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM accounts ORDER BY created_at") as cur:
             return [dict(r) for r in await cur.fetchall()]
 
 
 async def get_active_accounts() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM accounts WHERE is_active = 1 ORDER BY created_at"
@@ -76,7 +79,7 @@ async def get_active_accounts() -> list:
 
 
 async def get_account_by_id(account_id: int) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM accounts WHERE id = ?", (account_id,)) as cur:
             row = await cur.fetchone()
@@ -84,7 +87,7 @@ async def get_account_by_id(account_id: int) -> dict | None:
 
 
 async def get_account_by_phone(phone: str) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM accounts WHERE phone = ?", (phone,)) as cur:
             row = await cur.fetchone()
@@ -92,7 +95,7 @@ async def get_account_by_phone(phone: str) -> dict | None:
 
 
 async def add_account(phone: str, session_string: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(
             "INSERT INTO accounts (phone, session_string, is_active) VALUES (?, ?, 1)",
             (phone, session_string),
@@ -101,20 +104,20 @@ async def add_account(phone: str, session_string: str):
 
 
 async def delete_account(account_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
         await db.commit()
 
 
 async def get_all_groups() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM groups ORDER BY title") as cur:
             return [dict(r) for r in await cur.fetchall()]
 
 
 async def save_groups(groups: list):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         for g in groups:
             await db.execute(
                 "INSERT OR REPLACE INTO groups (group_id, title, username) VALUES (?, ?, ?)",
@@ -124,7 +127,7 @@ async def save_groups(groups: list):
 
 
 async def get_group_by_id(group_id: int) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM groups WHERE id = ?", (group_id,)) as cur:
             row = await cur.fetchone()
@@ -132,13 +135,13 @@ async def get_group_by_id(group_id: int) -> dict | None:
 
 
 async def delete_group(group_db_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("DELETE FROM groups WHERE id = ?", (group_db_id,))
         await db.commit()
 
 
 async def delete_all_groups():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("DELETE FROM groups")
         await db.commit()
 
@@ -151,7 +154,7 @@ async def create_broadcast_task(
     interval_minutes: int = 1,
     stagger_seconds: int = 60,
 ) -> int:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         cur = await db.execute(
             "INSERT INTO broadcast_tasks "
             "(message_text, account_ids, group_ids, interval_seconds, interval_minutes, stagger_seconds, status) "
@@ -170,7 +173,7 @@ async def create_broadcast_task(
 
 
 async def get_broadcast_task(task_id: int) -> dict | None:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM broadcast_tasks WHERE id = ?", (task_id,)
@@ -180,7 +183,7 @@ async def get_broadcast_task(task_id: int) -> dict | None:
 
 
 async def update_broadcast_status(task_id: int, status: str):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute(
             "UPDATE broadcast_tasks SET status = ? WHERE id = ?", (status, task_id)
         )
@@ -188,13 +191,13 @@ async def update_broadcast_status(task_id: int, status: str):
 
 
 async def delete_broadcast_task(task_id: int):
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("DELETE FROM broadcast_tasks WHERE id = ?", (task_id,))
         await db.commit()
 
 
 async def get_all_broadcast_tasks() -> list:
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(get_db_path()) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM broadcast_tasks ORDER BY created_at DESC"

@@ -20,7 +20,11 @@ _pending_qr_logins: dict[int, object] = {}
 
 
 def _get_api_credentials() -> tuple[int, str]:
-    load_dotenv()
+    env_file = os.getenv("ENV_FILE")
+    if env_file and os.path.exists(env_file):
+        load_dotenv(dotenv_path=env_file)
+    else:
+        load_dotenv()
 
     api_id_raw = os.getenv("API_ID", "").strip()
     api_hash = os.getenv("API_HASH", "").strip()

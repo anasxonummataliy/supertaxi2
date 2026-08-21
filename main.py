@@ -1,45 +1,73 @@
 import asyncio
 import logging
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-env_path = Path(__file__).resolve().parent / ".env"
-load_dotenv(dotenv_path=env_path)
+# Env faylni aniqlash (CLI argumenti, ENV_FILE muhit o'zgaruvchisi yoki standart .env)
+env_arg = None
+for i, arg in enumerate(sys.argv[1:], 1):
+    if arg == "--env" and i < len(sys.argv) - 1:
+        env_arg = sys.argv[i + 1]
+        break
+    elif not arg.startswith("-") and os.path.exists(arg):
+        env_arg = arg
+        break
 
-from aiogram import Bot, Dispatcher, Router
-from aiogram.types import Message, CallbackQuery
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.fsm.storage.memory import MemoryStorage
+env_path_str = env_arg or os.getenv("ENV_FILE") or ".env"
+env_path = Path(env_path_str).resolve()
 
-from database.db import init_db, reset_running_tasks
-from handlers import accounts, broadcast, groups, menu
-from keyboards.inline import main_menu_keyboard
-from services.broadcaster import BroadcastManager
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path, override=True)
+    os.environ["ENV_FILE"] = str(env_path)
+else:
+    load_dotenv()
 
-
+# Log sozlamalari
+log_file = os.getenv("LOG_FILE", "bot.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.FileHandler(log_file, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
 
 logger = logging.getLogger(__name__)
 
-
+from aiogram import Bot, Dispatcher, Router
+from aiogram.types import Message, CallbackQuery
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.session.aiohttp import AiohttpSession
 
+from database.db import init_db, reset_running_tasks, get_db_path
+from handlers import accounts, broadcast, groups, menu
+from keyboards.inline import main_menu_keyboard
+from services.broadcaster import BroadcastManager
+
+
 async def main():
+    bot_token = os.getenv("BOT_TOKEN", "").strip()
+    if not bot_token:
+        logger.error("BOT_TOKEN topilmadi! .env faylni tekshiring.")
+        return
+
+    db_path = get_db_path()
+    logger.info(f"Ishga tushirilmoqda...")
+    logger.info(f"-> Konfiguratsiya fayli: {env_path}")
+    logger.info(f"-> Ma'lumotlar bazasi:  {db_path}")
+    logger.info(f"-> Log fayli:           {log_file}")
+
     await init_db()
     await reset_running_tasks()
 
     session = AiohttpSession(timeout=60.0)
     bot = Bot(
-        token=os.getenv("BOT_TOKEN"),
+        token=bot_token,
         session=session,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
@@ -65,7 +93,7 @@ async def main():
             await message.answer(
                 "🤖 <b>Boshqaruv paneli</b>\n\nBo'limni tanlang:",
                 reply_markup=main_menu_keyboard(),
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
         else:
             logger.info(f"Non-admin access attempt from Telegram ID: {message.from_user.id}")
@@ -73,7 +101,7 @@ async def main():
                 f"⛔ <b>Siz admin emassiz!</b>\n\n"
                 f"Sizning Telegram ID: <code>{message.from_user.id}</code>\n\n"
                 f"Boshqaruv panelidan foydalanish uchun ushbu ID ni <code>.env</code> faylidagi <code>ADMIN_IDS</code> qatoriga qo'shing.",
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
 
     @fallback_router.callback_query()
@@ -87,7 +115,7 @@ async def main():
         else:
             await callback.answer(
                 f"⛔ Siz admin emassiz! (ID: {callback.from_user.id})",
-                show_alert=True
+                show_alert=True,
             )
 
     dp.include_router(fallback_router)
@@ -112,7 +140,7 @@ async def main():
         logger.error(f"Kutilmagan xatolik: {exc}", exc_info=exc)
         return True
 
-    logger.info("Bot ishga tushdi")
+    logger.info("Bot polling orqali ishga tushdi")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
         await dp.start_polling(
