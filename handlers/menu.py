@@ -2,6 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 from keyboards.inline import main_menu_keyboard
 from utils.filters import AdminFilter
 
@@ -23,9 +24,12 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.callback_query(F.data == "menu_main")
 async def cb_main_menu(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    await callback.message.edit_text(
-        "🤖 <b>Boshqaruv paneli</b>\n\nBo'limni tanlang:",
-        reply_markup=main_menu_keyboard(),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            "🤖 <b>Boshqaruv paneli</b>\n\nBo'limni tanlang:",
+            reply_markup=main_menu_keyboard(),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()

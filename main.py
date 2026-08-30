@@ -11,7 +11,7 @@ for i, arg in enumerate(sys.argv[1:], 1):
     if arg == "--env" and i < len(sys.argv) - 1:
         env_arg = sys.argv[i + 1]
         break
-    elif not arg.startswith("-") and os.path.exists(arg):
+    elif not arg.startswith("-"):
         env_arg = arg
         break
 

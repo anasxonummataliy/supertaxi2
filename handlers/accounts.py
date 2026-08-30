@@ -8,6 +8,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
+from aiogram.exceptions import TelegramBadRequest
 from states.forms import AddAccountStates
 from keyboards.inline import (
     accounts_menu_keyboard,
@@ -424,17 +425,20 @@ async def msg_2fa(message: Message, state: FSMContext):
 @router.callback_query(F.data == "account_list")
 async def cb_account_list(callback: CallbackQuery):
     accounts = await db.get_all_accounts()
-    if not accounts:
-        await callback.message.edit_text(
-            "📋 Hozircha akkauntlar yo'q.",
-            reply_markup=back_keyboard("menu_accounts"),
-        )
-    else:
-        await callback.message.edit_text(
-            f"📋 <b>Akkauntlar ro'yxati</b> ({len(accounts)} ta):",
-            reply_markup=account_list_keyboard(accounts),
-            parse_mode="HTML",
-        )
+    try:
+        if not accounts:
+            await callback.message.edit_text(
+                "📋 Hozircha akkauntlar yo'q.",
+                reply_markup=back_keyboard("menu_accounts"),
+            )
+        else:
+            await callback.message.edit_text(
+                f"📋 <b>Akkauntlar ro'yxati</b> ({len(accounts)} ta):",
+                reply_markup=account_list_keyboard(accounts),
+                parse_mode="HTML",
+            )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 

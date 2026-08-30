@@ -110,3 +110,4 @@ Xizmatlarni yoqish va ishga tushirish:
 sudo systemctl daemon-reload
 sudo systemctl enable --now supertaxi_bot1 supertaxi_bot2
 ```
+

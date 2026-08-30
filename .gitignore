@@ -1,7 +1,31 @@
 .venv/
+venv/
+ENV/
+env/
+
+# Env fayllar (example fayllar qoladi)
 .env
-bot.db
+.env.*
+!.env.example
+!.env.bot1.example
+!.env.bot2.example
+
+# Telethon sessiyalar va jurnallar
+*.session
+*.session-journal
+*.db-journal
+*.log
 bot.log
+bot1.log
+bot2.log
+
+# Baza fayllari (bot1.db va bot2.db serverga yuklanishi uchun ruxsat berildi)
+*.db
+!bot1.db
+!bot2.db
+
 __pycache__/
 *.pyc
 .DS_Store
+.idea/
+.vscode/

@@ -4,6 +4,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
+from aiogram.exceptions import TelegramBadRequest
 from states.forms import BroadcastStates
 from keyboards.inline import (
     broadcast_menu_keyboard,
@@ -62,10 +63,13 @@ async def _render_groups_selection(
         page_size=GROUPS_PAGE_SIZE,
     )
 
-    if edit_text:
-        await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
-    else:
-        await callback.message.edit_reply_markup(reply_markup=reply_markup)
+    try:
+        if edit_text:
+            await callback.message.edit_text(text, reply_markup=reply_markup, parse_mode="HTML")
+        else:
+            await callback.message.edit_reply_markup(reply_markup=reply_markup)
+    except TelegramBadRequest:
+        pass
 
 
 def _build_broadcast_task_text(task_id: int, task: dict) -> str:
@@ -79,35 +83,36 @@ def _build_broadcast_task_text(task_id: int, task: dict) -> str:
     short_msg = task["message_text"][:80] + (
         "..." if len(task["message_text"]) > 80 else ""
     )
-    stagger = task.get("stagger_seconds", 30)
-    return (
-        f"📢 <b>Tarqatish #{task_id}</b>\n\n"
-        f"📝 Xabar: <i>{short_msg}</i>\n"
-        f"👥 Akkauntlar: {len(account_ids)} ta\n"
-        f"🏘 Guruhlar: {len(group_ids)} ta\n"
-        f"⏱ Qayta yuborish: {task.get('interval_minutes', 6)} daqiqa\n"
-        f"⏳ Akkauntlar orasi: {stagger} sek\n"
-        f"📊 Holat: {status_map.get(task['status'], task['status'])}\n"
-        f"📅 Yaratilgan: {task['created_at']}"
-    )
+    lines = [
+        f"📢 <b>Tarqatish #{task_id}</b>",
+        "",
+        f"📊 Holat: {status_map.get(task['status'], task['status'])}",
+        f"👥 Akkauntlar: <b>{len(account_ids)} ta</b>",
+        f"🏘 Guruhlar: <b>{len(group_ids)} ta</b>",
+        f"⏱ Qayta yuborish: <b>{task.get('interval_minutes', 6)} daqiqa</b>",
+        f"⏳ Akkauntlar orasi: <b>{task.get('stagger_seconds', 30)} sek</b>",
+        "",
+        f"📝 <b>Xabar matni:</b>\n<i>{short_msg}</i>",
+    ]
+    return "\n".join(lines)
 
 
 def _fmt_dt(dt) -> str:
-    if dt is None:
+    if not dt:
         return "—"
     return dt.strftime("%H:%M:%S")
 
 
-def _fmt_remaining(seconds) -> str:
-    if seconds is None:
+def _fmt_remaining(sec: float | None) -> str:
+    if sec is None:
         return "—"
-    seconds = int(seconds)
-    if seconds <= 0:
+    sec = int(round(sec))
+    if sec <= 0:
         return "hozir"
-    m, s = divmod(seconds, 60)
-    if m == 0:
-        return f"{s}s"
-    return f"{m}d {s}s"
+    m, s = divmod(sec, 60)
+    if m > 0:
+        return f"{m} daq {s} sek"
+    return f"{s} sek"
 
 
 def _build_stats_text(task_id: int, task: dict, stats: list[dict]) -> str:
@@ -116,17 +121,18 @@ def _build_stats_text(task_id: int, task: dict, stats: list[dict]) -> str:
         "paused": "🟡 Kutmoqda",
         "stopped": "🔴 To'xtatilgan",
     }
-    stagger = task.get("stagger_seconds", 30)
     lines = [
-        f"📊 <b>Tarqatish #{task_id} — Statistika</b>",
-        f"📌 Holat: {status_map.get(task['status'], task['status'])}",
-        f"⏱ Qayta yuborish: {task.get('interval_minutes', 6)} daqiqa | Akkauntlar orasi: {stagger} sek",
+        f"📊 <b>Tarqatish #{task_id} statistikasi</b>",
+        f"Holat: {status_map.get(task['status'], task['status'])}",
+        f"⏱ Qayta yuborish: {task.get('interval_minutes', 6)} daqiqa",
+        f"⏳ Akkauntlar orasi: {task.get('stagger_seconds', 30)} sek",
         "",
+        "<b>Akkauntlar bo'yicha holat:</b>",
     ]
-    for i, s in enumerate(stats, 1):
-        active_mark = "✅" if s["is_active"] else "❌"
-        lines.append(f"<b>{i}. {active_mark} {s['phone']}</b>")
-        lines.append(f"   📤 Oxirgi yuborildi: {_fmt_dt(s['last_sent'])}")
+    for s in stats:
+        active_mark = "🟢" if s["is_active"] else "🔴"
+        lines.append(f"{active_mark} <code>{s['phone']}</code>:")
+        lines.append(f"   ⏱ Oxirgi yuborish: {_fmt_dt(s['last_sent'])}")
         lines.append(f"   ⏭ Keyingi yuborish: {_fmt_dt(s['next_send'])}")
         lines.append(f"   ⏳ Qoldi: {_fmt_remaining(s['remaining_sec'])}")
         lines.append("")
@@ -134,11 +140,14 @@ def _build_stats_text(task_id: int, task: dict, stats: list[dict]) -> str:
 
 
 async def _render_broadcast_task(callback: CallbackQuery, task_id: int, task: dict):
-    await callback.message.edit_text(
-        _build_broadcast_task_text(task_id, task),
-        reply_markup=broadcast_control_keyboard(task_id, task["status"]),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            _build_broadcast_task_text(task_id, task),
+            reply_markup=broadcast_control_keyboard(task_id, task["status"]),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest:
+        pass
 
 
 @router.callback_query(F.data == "menu_broadcast")
@@ -198,9 +207,12 @@ async def cb_toggle_account(callback: CallbackQuery, state: FSMContext):
     selected = set(data.get("selected_accounts", []))
     selected.symmetric_difference_update({acc_id})
     await state.update_data(selected_accounts=list(selected))
-    await callback.message.edit_reply_markup(
-        reply_markup=accounts_checkbox_keyboard(data["accounts_list"], selected)
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=accounts_checkbox_keyboard(data["accounts_list"], selected)
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -211,9 +223,12 @@ async def cb_acc_select_all(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     selected = {a["id"] for a in data["accounts_list"]}
     await state.update_data(selected_accounts=list(selected))
-    await callback.message.edit_reply_markup(
-        reply_markup=accounts_checkbox_keyboard(data["accounts_list"], selected)
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=accounts_checkbox_keyboard(data["accounts_list"], selected)
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -223,9 +238,12 @@ async def cb_acc_select_all(callback: CallbackQuery, state: FSMContext):
 async def cb_acc_deselect_all(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     await state.update_data(selected_accounts=[])
-    await callback.message.edit_reply_markup(
-        reply_markup=accounts_checkbox_keyboard(data["accounts_list"], set())
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=accounts_checkbox_keyboard(data["accounts_list"], set())
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -507,9 +525,12 @@ async def cb_adjust_interval_minutes(callback: CallbackQuery, state: FSMContext)
         return
 
     await state.update_data(interval_minutes=new_val)
-    await callback.message.edit_reply_markup(
-        reply_markup=interval_keyboard(new_val)
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=interval_keyboard(new_val)
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -612,9 +633,12 @@ async def cb_adjust_stagger(callback: CallbackQuery, state: FSMContext):
         return
 
     await state.update_data(stagger_seconds=new_val)
-    await callback.message.edit_reply_markup(
-        reply_markup=stagger_keyboard(new_val)
-    )
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=stagger_keyboard(new_val)
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -682,34 +706,40 @@ async def cb_bcast_delete_confirm(callback: CallbackQuery, broadcast_manager: Br
     await broadcast_manager.stop(task_id)
     await db.delete_broadcast_task(task_id)
     tasks = await db.get_all_broadcast_tasks()
-    if not tasks:
-        await callback.message.edit_text(
-            "📋 Hozircha tarqatishlar yo'q.",
-            reply_markup=back_keyboard("menu_broadcast"),
-        )
-    else:
-        await callback.message.edit_text(
-            f"📋 <b>Tarqatishlar ro'yxati</b> ({len(tasks)} ta):",
-            reply_markup=broadcast_list_keyboard(tasks),
-            parse_mode="HTML",
-        )
+    try:
+        if not tasks:
+            await callback.message.edit_text(
+                "📋 Hozircha tarqatishlar yo'q.",
+                reply_markup=back_keyboard("menu_broadcast"),
+            )
+        else:
+            await callback.message.edit_text(
+                f"📋 <b>Tarqatishlar ro'yxati</b> ({len(tasks)} ta):",
+                reply_markup=broadcast_list_keyboard(tasks),
+                parse_mode="HTML",
+            )
+    except TelegramBadRequest:
+        pass
     await callback.answer("🗑 O'chirildi!", show_alert=True)
 
 
 @router.callback_query(F.data == "bcast_list")
 async def cb_bcast_list(callback: CallbackQuery):
     tasks = await db.get_all_broadcast_tasks()
-    if not tasks:
-        await callback.message.edit_text(
-            "📋 Hozircha tarqatishlar yo'q.",
-            reply_markup=back_keyboard("menu_broadcast"),
-        )
-    else:
-        await callback.message.edit_text(
-            f"📋 <b>Tarqatishlar ro'yxati</b> ({len(tasks)} ta):",
-            reply_markup=broadcast_list_keyboard(tasks),
-            parse_mode="HTML",
-        )
+    try:
+        if not tasks:
+            await callback.message.edit_text(
+                "📋 Hozircha tarqatishlar yo'q.",
+                reply_markup=back_keyboard("menu_broadcast"),
+            )
+        else:
+            await callback.message.edit_text(
+                f"📋 <b>Tarqatishlar ro'yxati</b> ({len(tasks)} ta):",
+                reply_markup=broadcast_list_keyboard(tasks),
+                parse_mode="HTML",
+            )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -742,11 +772,14 @@ async def cb_bcast_stats(callback: CallbackQuery, broadcast_manager: BroadcastMa
     stats = broadcast_manager.get_account_stats(task_id, accounts)
     text = _build_stats_text(task_id, task, stats)
 
-    await callback.message.edit_text(
-        text,
-        reply_markup=broadcast_stats_keyboard(task_id),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            text,
+            reply_markup=broadcast_stats_keyboard(task_id),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 

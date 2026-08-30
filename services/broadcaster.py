@@ -244,6 +244,21 @@ class BroadcastManager:
                         )
                         await self._notify_admins(notify_msg)
 
+                        err_lower = str(e).lower()
+                        if (
+                            "authorization has been invalidated" in err_lower
+                            or "deauthorized" in err_lower
+                            or "session_revoked" in err_lower
+                            or "session_expired" in err_lower
+                            or "sessionpasswordneeded" in err_lower
+                        ):
+                            logger.warning(
+                                f"[{task_id}] Akkaunt {account['phone']} sessiyasi bekor qilingan, nofaol holatga o'tkazildi."
+                            )
+                            await db.update_account_status(account["id"], 0)
+                            await tm.disconnect_and_remove(account["phone"])
+                            break
+
                 finish_time = asyncio.get_event_loop().time()
                 last_sent[account["id"]] = finish_time
 

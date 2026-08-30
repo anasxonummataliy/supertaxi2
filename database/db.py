@@ -51,6 +51,12 @@ async def init_db():
             )
         except Exception:
             pass
+        try:
+            await db.execute(
+                "ALTER TABLE broadcast_tasks ADD COLUMN interval_minutes INTEGER DEFAULT 1"
+            )
+        except Exception:
+            pass
         await db.commit()
 
 
@@ -99,6 +105,14 @@ async def add_account(phone: str, session_string: str):
         await db.execute(
             "INSERT INTO accounts (phone, session_string, is_active) VALUES (?, ?, 1)",
             (phone, session_string),
+        )
+        await db.commit()
+
+
+async def update_account_status(account_id: int, is_active: int):
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            "UPDATE accounts SET is_active = ? WHERE id = ?", (is_active, account_id)
         )
         await db.commit()
 

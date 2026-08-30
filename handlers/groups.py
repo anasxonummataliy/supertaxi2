@@ -3,6 +3,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
+from aiogram.exceptions import TelegramBadRequest
 
 from database import db
 from keyboards.inline import (
@@ -120,20 +121,21 @@ async def msg_group_add_username(message: Message, state: FSMContext):
 async def cb_group_list(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     groups = await db.get_all_groups()
-    if not groups:
-        await callback.message.edit_text(
-            "❌ Hali hech qanday guruh qo'shilmagan.",
-            reply_markup=groups_menu_keyboard(),
-        )
-        await callback.answer()
-        return
-
-    await callback.message.edit_text(
-        f"📋 <b>Guruhlar ro'yxati</b> ({len(groups)} ta):\n\n"
-        f"Tafsilotlarni ko'rish va o'chirish uchun guruhni tanlang:",
-        reply_markup=group_list_keyboard(groups),
-        parse_mode="HTML",
-    )
+    try:
+        if not groups:
+            await callback.message.edit_text(
+                "❌ Hali hech qanday guruh qo'shilmagan.",
+                reply_markup=groups_menu_keyboard(),
+            )
+        else:
+            await callback.message.edit_text(
+                f"📋 <b>Guruhlar ro'yxati</b> ({len(groups)} ta):\n\n"
+                f"Tafsilotlarni ko'rish va o'chirish uchun guruhni tanlang:",
+                reply_markup=group_list_keyboard(groups),
+                parse_mode="HTML",
+            )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -146,14 +148,17 @@ async def cb_group_view(callback: CallbackQuery, state: FSMContext):
         return
 
     un = f"@{group['username']}" if group.get("username") else "Yo'q"
-    await callback.message.edit_text(
-        f"🏘 <b>Guruh tafsilotlari</b>\n\n"
-        f"📌 <b>Nomi:</b> {group['title']}\n"
-        f"🔗 <b>Username:</b> {un}\n"
-        f"🆔 <b>Telegram ID:</b> <code>{group['group_id']}</code>",
-        reply_markup=group_detail_keyboard(group_db_id),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            f"🏘 <b>Guruh tafsilotlari</b>\n\n"
+            f"📌 <b>Nomi:</b> {group['title']}\n"
+            f"🔗 <b>Username:</b> {un}\n"
+            f"🆔 <b>Telegram ID:</b> <code>{group['group_id']}</code>",
+            reply_markup=group_detail_keyboard(group_db_id),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -164,17 +169,20 @@ async def cb_group_delete(callback: CallbackQuery, state: FSMContext):
     await callback.answer("Guruh o'chirildi!", show_alert=True)
 
     groups = await db.get_all_groups()
-    if not groups:
-        await callback.message.edit_text(
-            "📋 Hali hech qanday guruh qo'shilmagan.",
-            reply_markup=groups_menu_keyboard(),
-        )
-    else:
-        await callback.message.edit_text(
-            f"📋 <b>Guruhlar ro'yxati</b> ({len(groups)} ta):",
-            reply_markup=group_list_keyboard(groups),
-            parse_mode="HTML",
-        )
+    try:
+        if not groups:
+            await callback.message.edit_text(
+                "📋 Hali hech qanday guruh qo'shilmagan.",
+                reply_markup=groups_menu_keyboard(),
+            )
+        else:
+            await callback.message.edit_text(
+                f"📋 <b>Guruhlar ro'yxati</b> ({len(groups)} ta):",
+                reply_markup=group_list_keyboard(groups),
+                parse_mode="HTML",
+            )
+    except TelegramBadRequest:
+        pass
 
 
 @router.callback_query(F.data == "group_clear_all")
@@ -182,10 +190,13 @@ async def cb_group_clear_all(callback: CallbackQuery, state: FSMContext):
     await db.delete_all_groups()
     await callback.answer("Barcha guruhlar tozalandi!", show_alert=True)
     groups = await db.get_all_groups()
-    await callback.message.edit_text(
-        f"🏘 <b>Guruhlar boshqaruvi</b>\n\n"
-        f"Bazasidagi jami guruhlar soni: <b>{len(groups)} ta</b>\n\n"
-        f"Bo'limni tanlang:",
-        reply_markup=groups_menu_keyboard(),
-        parse_mode="HTML",
-    )
+    try:
+        await callback.message.edit_text(
+            f"🏘 <b>Guruhlar boshqaruvi</b>\n\n"
+            f"Bazasidagi jami guruhlar soni: <b>{len(groups)} ta</b>\n\n"
+            f"Bo'limni tanlang:",
+            reply_markup=groups_menu_keyboard(),
+            parse_mode="HTML",
+        )
+    except TelegramBadRequest:
+        pass
