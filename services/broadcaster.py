@@ -235,10 +235,15 @@ class BroadcastManager:
                             f"[{task_id}] Xatolik {account['phone']} -> {group['title']}: {e}"
                         )
                         un_str = f" (@{group['username']})" if group.get("username") else ""
+                        phone = account['phone']
+                        clean_phone = phone.replace(" ", "").replace("-", "")
+                        if not clean_phone.startswith("+"):
+                            clean_phone = f"+{clean_phone}"
+                        phone_link = f'<a href="https://t.me/{clean_phone}">{phone}</a>'
                         notify_msg = (
                             f"⚠️ <b>Guruhga xabar yuborilmadi!</b>\n\n"
                             f"📢 <b>Tarqatish:</b> #{task_id}\n"
-                            f"👤 <b>Akkaunt:</b> <code>{account['phone']}</code>\n"
+                            f"👤 <b>Akkaunt:</b> {phone_link}\n"
                             f"🏘 <b>Guruh:</b> <b>{group['title']}</b>{un_str}\n"
                             f"❌ <b>Sabab:</b> <i>{err_reason}</i>"
                         )

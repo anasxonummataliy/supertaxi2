@@ -450,9 +450,13 @@ async def cb_account_view(callback: CallbackQuery):
         await callback.answer("Akkaunt topilmadi.", show_alert=True)
         return
     status_text = "✅ Faol" if acc["is_active"] else "❌ Nofaol"
+    phone = acc["phone"]
+    clean_phone = phone.replace(" ", "").replace("-", "")
+    if not clean_phone.startswith("+"):
+        clean_phone = f"+{clean_phone}"
     text = (
         f"👤 <b>Akkaunt ma'lumotlari</b>\n\n"
-        f"📱 Telefon: <code>{acc['phone']}</code>\n"
+        f"📱 Telefon: <a href=\"https://t.me/{clean_phone}\">{phone}</a>\n"
         f"📊 Holat: {status_text}\n"
         f"📅 Qo'shilgan: {acc['created_at']}"
     )

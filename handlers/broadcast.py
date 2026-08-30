@@ -131,7 +131,12 @@ def _build_stats_text(task_id: int, task: dict, stats: list[dict]) -> str:
     ]
     for s in stats:
         active_mark = "🟢" if s["is_active"] else "🔴"
-        lines.append(f"{active_mark} <code>{s['phone']}</code>:")
+        phone = s["phone"]
+        clean_phone = phone.replace(" ", "").replace("-", "")
+        if not clean_phone.startswith("+"):
+            clean_phone = f"+{clean_phone}"
+        phone_link = f'<a href="https://t.me/{clean_phone}">{phone}</a>'
+        lines.append(f"{active_mark} {phone_link}:")
         lines.append(f"   ⏱ Oxirgi yuborish: {_fmt_dt(s['last_sent'])}")
         lines.append(f"   ⏭ Keyingi yuborish: {_fmt_dt(s['next_send'])}")
         lines.append(f"   ⏳ Qoldi: {_fmt_remaining(s['remaining_sec'])}")
