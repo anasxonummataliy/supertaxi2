@@ -57,6 +57,14 @@ async def init_db():
             )
         except Exception:
             pass
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS broadcast_account_stats (
+                task_id INTEGER NOT NULL,
+                account_id INTEGER NOT NULL,
+                last_sent_at TEXT,
+                PRIMARY KEY (task_id, account_id)
+            )
+        """)
         await db.commit()
 
 
@@ -207,6 +215,7 @@ async def update_broadcast_status(task_id: int, status: str):
 async def delete_broadcast_task(task_id: int):
     async with aiosqlite.connect(get_db_path()) as db:
         await db.execute("DELETE FROM broadcast_tasks WHERE id = ?", (task_id,))
+        await db.execute("DELETE FROM broadcast_account_stats WHERE task_id = ?", (task_id,))
         await db.commit()
 
 
@@ -217,3 +226,27 @@ async def get_all_broadcast_tasks() -> list:
             "SELECT * FROM broadcast_tasks ORDER BY created_at DESC"
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
+
+
+async def record_account_last_sent(task_id: int, account_id: int, last_sent_at: str):
+    async with aiosqlite.connect(get_db_path()) as db:
+        await db.execute(
+            """
+            INSERT INTO broadcast_account_stats (task_id, account_id, last_sent_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(task_id, account_id) DO UPDATE SET last_sent_at = excluded.last_sent_at
+            """,
+            (task_id, account_id, last_sent_at),
+        )
+        await db.commit()
+
+
+async def get_broadcast_account_last_sent(task_id: int) -> dict[int, str]:
+    async with aiosqlite.connect(get_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT account_id, last_sent_at FROM broadcast_account_stats WHERE task_id = ?",
+            (task_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return {r["account_id"]: r["last_sent_at"] for r in rows}

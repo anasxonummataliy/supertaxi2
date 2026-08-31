@@ -100,7 +100,17 @@ def _build_broadcast_task_text(task_id: int, task: dict) -> str:
 def _fmt_dt(dt) -> str:
     if not dt:
         return "—"
-    return dt.strftime("%H:%M:%S")
+    if isinstance(dt, str):
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(dt)
+        except Exception:
+            return dt
+    from datetime import datetime
+    now = datetime.now()
+    if dt.date() == now.date():
+        return dt.strftime("%H:%M:%S")
+    return dt.strftime("%d.%m %H:%M")
 
 
 def _fmt_remaining(sec: float | None) -> str:
@@ -774,7 +784,7 @@ async def cb_bcast_stats(callback: CallbackQuery, broadcast_manager: BroadcastMa
         if acc:
             accounts.append(acc)
 
-    stats = broadcast_manager.get_account_stats(task_id, accounts)
+    stats = await broadcast_manager.get_account_stats(task_id, accounts)
     text = _build_stats_text(task_id, task, stats)
 
     try:

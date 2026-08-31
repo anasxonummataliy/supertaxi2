@@ -52,15 +52,15 @@ class BroadcastManager:
         wall = time.time() + (mono - asyncio.get_event_loop().time())
         return datetime.fromtimestamp(wall)
 
-    def get_account_stats(self, task_id: int, accounts: list[dict]) -> list[dict]:
+    async def get_account_stats(self, task_id: int, accounts: list[dict]) -> list[dict]:
         schedule = self._next_send_time.get(task_id, {})
         last_sent = self._last_sent_time.get(task_id, {})
+        db_last_sent = await db.get_broadcast_account_last_sent(task_id)
         now_mono = asyncio.get_event_loop().time()
         result = []
         for acc in accounts:
             acc_id = acc["id"]
             next_mono = schedule.get(acc_id)
-            last_mono = last_sent.get(acc_id)
 
             if next_mono is not None:
                 remaining_sec = max(0.0, next_mono - now_mono)
@@ -69,7 +69,14 @@ class BroadcastManager:
                 remaining_sec = None
                 next_dt = None
 
-            last_dt = self._mono_to_wall(last_mono) if last_mono is not None else None
+            last_dt = None
+            if acc_id in last_sent:
+                last_dt = self._mono_to_wall(last_sent[acc_id])
+            elif acc_id in db_last_sent and db_last_sent[acc_id]:
+                try:
+                    last_dt = datetime.fromisoformat(db_last_sent[acc_id])
+                except Exception:
+                    last_dt = None
 
             result.append({
                 "phone": acc["phone"],
@@ -85,7 +92,6 @@ class BroadcastManager:
         if task_id in self._tasks and not self._tasks[task_id].done():
             return
         self._next_send_time.pop(task_id, None)
-        self._last_sent_time.pop(task_id, None)
         task = asyncio.create_task(
             self._broadcast_loop(task_id), name=f"broadcast_{task_id}"
         )
@@ -110,7 +116,6 @@ class BroadcastManager:
                 pass
         self._tasks.pop(task_id, None)
         self._next_send_time.pop(task_id, None)
-        self._last_sent_time.pop(task_id, None)
         logger.info(f"Broadcast {task_id} yakunlandi")
 
     async def _broadcast_loop(self, task_id: int):
@@ -266,6 +271,11 @@ class BroadcastManager:
 
                 finish_time = asyncio.get_event_loop().time()
                 last_sent[account["id"]] = finish_time
+                finish_wall = datetime.now()
+                try:
+                    await db.record_account_last_sent(task_id, account["id"], finish_wall.isoformat())
+                except Exception as ex:
+                    logger.warning(f"[{task_id}] record_account_last_sent xatosi: {ex}")
 
                 # Next run for this account:
                 # 1. At least cycle_sec (e.g. 6 min) from its own finish time
