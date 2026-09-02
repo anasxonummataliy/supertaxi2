@@ -6,6 +6,10 @@ from datetime import datetime
 from database import db
 from services import telethon_manager as tm
 
+import html
+import re
+from telethon import errors
+
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 5.0
@@ -14,14 +18,48 @@ _POLL_INTERVAL = 5.0
 def _format_send_error(e: Exception) -> str:
     err_str = str(e)
     err_lower = err_str.lower()
+    cls_name = type(e).__name__.lower()
+
+    # SlowModeWait (Guruhda Sekin rejim yoqilgan)
+    if (
+        isinstance(e, errors.SlowModeWaitError)
+        or "slowmode" in err_lower
+        or "slowmode" in cls_name
+        or "before sending another message in this chat" in err_lower
+    ):
+        sec = getattr(e, "seconds", None)
+        if sec is None:
+            m = re.search(r"(\d+)\s*seconds?", err_str, re.IGNORECASE)
+            if m:
+                sec = int(m.group(1))
+        if sec is not None:
+            mins, s = divmod(int(sec), 60)
+            wait_text = f"{mins} daqiqa {s} soniya" if mins else f"{s} soniya"
+            return f"Guruhda sekin rejim (Slow Mode) yoqilgan: yana {wait_text} kutish kerak"
+        return "Guruhda sekin rejim (Slow Mode) yoqilgan, belgilangan vaqt o'tmaguncha xabar yozib bo'lmaydi"
+
+    # FloodWait
+    if (
+        isinstance(e, errors.FloodWaitError)
+        or "floodwait" in err_lower
+        or "floodwait" in cls_name
+        or "flood wait" in err_lower
+    ):
+        sec = getattr(e, "seconds", None)
+        if sec is None:
+            m = re.search(r"(\d+)\s*seconds?", err_str, re.IGNORECASE)
+            if m:
+                sec = int(m.group(1))
+        if sec is not None:
+            mins, s = divmod(int(sec), 60)
+            wait_text = f"{mins} daqiqa {s} soniya" if mins else f"{s} soniya"
+            return f"Telegram cheklovi (FloodWait): yana {wait_text} kutish kerak"
+        return "Telegram cheklovi (FloodWait: biroz kutish kerak)"
+
     if "chatwriteforbidden" in err_lower or "cannot write" in err_lower or "write forbidden" in err_lower:
         return "Guruhda a'zolarga xabar yozish ruxsati yo'q (yopilgan)"
     if "userbannedinchannel" in err_lower or "banned" in err_lower or "restricted" in err_lower:
         return "Akkaunt bu guruhda bloklangan (ban qilingan)"
-    if "slowmodewait" in err_lower:
-        return f"Guruhda sekin rejim (Slowmode) yoqilgan"
-    if "floodwait" in err_lower:
-        return f"Telegram cheklovi (FloodWait: biroz kutish kerak)"
     if "session" in err_lower or "deauthorized" in err_lower or "invalidated" in err_lower:
         return "Akkaunt sessiyasi bekor qilingan (chiqib ketilgan)"
     if "channelprivate" in err_lower or "chatidinvalid" in err_lower or "could not find" in err_lower:
@@ -245,12 +283,14 @@ class BroadcastManager:
                         if not clean_phone.startswith("+"):
                             clean_phone = f"+{clean_phone}"
                         phone_link = f'<a href="https://t.me/{clean_phone}">{phone}</a>'
+                        title_escaped = html.escape(str(group.get('title') or ''))
+                        reason_escaped = html.escape(str(err_reason))
                         notify_msg = (
                             f"⚠️ <b>Guruhga xabar yuborilmadi!</b>\n\n"
                             f"📢 <b>Tarqatish:</b> #{task_id}\n"
                             f"👤 <b>Akkaunt:</b> {phone_link}\n"
-                            f"🏘 <b>Guruh:</b> <b>{group['title']}</b>{un_str}\n"
-                            f"❌ <b>Sabab:</b> <i>{err_reason}</i>"
+                            f"🏘 <b>Guruh:</b> <b>{title_escaped}</b>{un_str}\n"
+                            f"❌ <b>Sabab:</b> <i>{reason_escaped}</i>"
                         )
                         await self._notify_admins(notify_msg)
 
