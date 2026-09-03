@@ -106,11 +106,12 @@ def _fmt_dt(dt) -> str:
             dt = datetime.fromisoformat(dt)
         except Exception:
             return dt
-    from datetime import datetime
-    now = datetime.now()
-    if dt.date() == now.date():
-        return dt.strftime("%H:%M:%S")
-    return dt.strftime("%d.%m %H:%M")
+    from datetime import datetime, timedelta
+    dt_tz = dt + timedelta(hours=5)
+    now_tz = datetime.now() + timedelta(hours=5)
+    if dt_tz.date() == now_tz.date():
+        return dt_tz.strftime("%H:%M:%S")
+    return dt_tz.strftime("%d.%m %H:%M")
 
 
 def _fmt_remaining(sec: float | None) -> str:
