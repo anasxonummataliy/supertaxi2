@@ -20,7 +20,7 @@ def _format_send_error(e: Exception) -> str:
     err_lower = err_str.lower()
     cls_name = type(e).__name__.lower()
 
-    # SlowModeWait (Guruhda Sekin rejim yoqilgan)
+    # 1. SlowModeWait (Guruhda Sekin rejim yoqilgan)
     if (
         isinstance(e, errors.SlowModeWaitError)
         or "slowmode" in err_lower
@@ -38,7 +38,7 @@ def _format_send_error(e: Exception) -> str:
             return f"Guruhda sekin rejim (Slow Mode) yoqilgan: yana {wait_text} kutish kerak"
         return "Guruhda sekin rejim (Slow Mode) yoqilgan, belgilangan vaqt o'tmaguncha xabar yozib bo'lmaydi"
 
-    # FloodWait
+    # 2. FloodWait (Telegram cheklovi)
     if (
         isinstance(e, errors.FloodWaitError)
         or "floodwait" in err_lower
@@ -56,15 +56,111 @@ def _format_send_error(e: Exception) -> str:
             return f"Telegram cheklovi (FloodWait): yana {wait_text} kutish kerak"
         return "Telegram cheklovi (FloodWait: biroz kutish kerak)"
 
-    if "chatwriteforbidden" in err_lower or "cannot write" in err_lower or "write forbidden" in err_lower:
-        return "Guruhda a'zolarga xabar yozish ruxsati yo'q (yopilgan)"
-    if "userbannedinchannel" in err_lower or "banned" in err_lower or "restricted" in err_lower:
-        return "Akkaunt bu guruhda bloklangan (ban qilingan)"
-    if "session" in err_lower or "deauthorized" in err_lower or "invalidated" in err_lower:
-        return "Akkaunt sessiyasi bekor qilingan (chiqib ketilgan)"
-    if "channelprivate" in err_lower or "chatidinvalid" in err_lower or "could not find" in err_lower:
-        return "Guruh topilmadi yoki unga kirish imkoni yo'q"
-    return err_str
+    # 3. Guruhda yozish ruxsati yo'qligi (ChatWriteForbiddenError / You can't write in this chat)
+    if (
+        isinstance(e, getattr(errors, "ChatWriteForbiddenError", Exception))
+        or "chatwriteforbidden" in err_lower
+        or "chatwriteforbidden" in cls_name
+        or "can't write in this chat" in err_lower
+        or "cannot write in this chat" in err_lower
+        or "cannot write" in err_lower
+        or "can't write" in err_lower
+        or "write forbidden" in err_lower
+        or "chat_write_forbidden" in err_lower
+    ):
+        return "Guruhda a'zolarga xabar yozish ruxsati yo'q (yozish yopilgan yoki cheklangan)"
+
+    # 4. Guruhga a'zo bo'lmagani uchun yozib bo'lmasligi
+    if (
+        isinstance(e, getattr(errors, "ChatGuestSendForbiddenError", Exception))
+        or "chatguestsendforbidden" in err_lower
+        or "must join this channel" in err_lower
+        or "must join" in err_lower
+    ):
+        return "Guruhga xabar yuborishdan oldin unga a'zo bo'lish talab etiladi"
+
+    # 5. Faqat adminlar yozishi mumkin bo'lgan guruh/kanal
+    if (
+        isinstance(e, getattr(errors, "ChatAdminRequiredError", Exception))
+        or "chatadminrequired" in err_lower
+        or "admin privileges are required" in err_lower
+        or "chat_admin_required" in err_lower
+    ):
+        return "Bu guruhga faqat adminlar xabar yoza oladi (Admin ruxsati kerak)"
+
+    # 6. Akkaunt guruhda bloklangan (Ban / Restricted)
+    if (
+        isinstance(e, getattr(errors, "UserBannedInChannelError", Exception))
+        or isinstance(e, getattr(errors, "ChatRestrictedError", Exception))
+        or "userbannedinchannel" in err_lower
+        or "chatrestricted" in err_lower
+        or "you're banned" in err_lower
+        or "banned from sending messages" in err_lower
+        or "restricted from sending" in err_lower
+        or "user_banned_in_channel" in err_lower
+    ):
+        return "Akkaunt bu guruhda bloklangan (admin tomonidan ban yoki cheklov qo'yilgan)"
+
+    # 7. Akkaunt Telegram tomonidan butunlay bloklangan yoki o'chirilgan
+    if (
+        isinstance(e, getattr(errors, "UserDeactivatedBanError", Exception))
+        or isinstance(e, getattr(errors, "PhoneNumberBannedError", Exception))
+        or "userdeactivatedban" in err_lower
+        or "phonenumberbanned" in err_lower
+        or "user_deactivated_ban" in err_lower
+        or "phone_number_banned" in err_lower
+    ):
+        return "Akkaunt Telegram tomonidan bloklangan (Spam / Ban)"
+
+    # 8. Sessiya bekor qilingan / chiqib ketilgan
+    if (
+        isinstance(e, getattr(errors, "SessionPasswordNeededError", Exception))
+        or isinstance(e, getattr(errors, "SessionRevokedError", Exception))
+        or isinstance(e, getattr(errors, "AuthKeyUnregisteredError", Exception))
+        or isinstance(e, getattr(errors, "AuthKeyDuplicatedError", Exception))
+        or "authorization has been invalidated" in err_lower
+        or "deauthorized" in err_lower
+        or "session_revoked" in err_lower
+        or "session_expired" in err_lower
+        or "sessionpasswordneeded" in err_lower
+        or "auth_key_unregistered" in err_lower
+        or "authkeyunregistered" in err_lower
+        or ("session" in err_lower and ("invalid" in err_lower or "revoked" in err_lower or "expired" in err_lower))
+    ):
+        return "Akkaunt sessiyasi bekor qilingan (chiqib ketilgan yoki 2FA o'zgargan)"
+
+    # 9. Guruh topilmadi / Private / Kirish imkoni yo'q
+    if (
+        isinstance(e, getattr(errors, "ChannelPrivateError", Exception))
+        or isinstance(e, getattr(errors, "ChannelInvalidError", Exception))
+        or isinstance(e, getattr(errors, "PeerIdInvalidError", Exception))
+        or "channelprivate" in err_lower
+        or "channel_private" in err_lower
+        or "chatidinvalid" in err_lower
+        or "peeridinvalid" in err_lower
+        or "the channel is private" in err_lower
+        or "could not find" in err_lower
+        or "entity not found" in err_lower
+    ):
+        return "Guruh topilmadi, yopiq (maxfiy) yoki unga kirish imkoni yo'q"
+
+    # 10. Xabar matni limiti yoki formati xatosi
+    if "messagetoolong" in err_lower or "message is too long" in err_lower or "message_too_long" in err_lower:
+        return "Xabar matni juda uzun (Telegram limiti 4096 ta belgi)"
+
+    if "messageempty" in err_lower or "message is empty" in err_lower or "message_empty" in err_lower:
+        return "Xabar matni bo'sh bo'lishi mumkin emas"
+
+    # 11. Tarmoq va timeout xatoliklari
+    if "timeout" in err_lower or "timed out" in err_lower or "connection" in err_lower:
+        return "Internet yoki Telegram serveri bilan ulanishda vaqtinchalik uzilish (Timeout)"
+
+    # Boshqa Telethon xatoliklari bo'lsa, "(caused by ...)" texnik qismini olib tashlab toza chiqarish
+    clean_msg = err_str
+    if "(caused by" in clean_msg:
+        clean_msg = clean_msg.split("(caused by")[0].strip()
+
+    return f"Telegram xatoligi: {clean_msg}"
 
 
 class BroadcastManager:
