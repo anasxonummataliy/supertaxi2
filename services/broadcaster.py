@@ -7,7 +7,6 @@ from database import db
 from services import telethon_manager as tm
 
 import html
-import random
 import re
 from telethon import errors
 
@@ -15,17 +14,6 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 5.0
 
-# Ko'rinmas belgilar (har bir yuborilgan xabarni Telegram filtrlari uchun avtomatik noyob/unique qilish)
-_ZERO_WIDTH_CHARS = ["\u200b", "\u200c", "\u200d", "\ufeff"]
-
-
-def apply_anti_flood_variation(text: str) -> str:
-    """Foydalanuvchining oddiy matniga orqa fonda avtomatik ko'rinmas belgilar qo'shib har safar yangi hash yaratadi."""
-    if not text:
-        return text
-    # 1 dan 4 tagacha tasodifiy ko'rinmas belgilar qo'shiladi (foydalanuvchiga umuman ko'rinmaydi)
-    invisible_salt = "".join(random.choices(_ZERO_WIDTH_CHARS, k=random.randint(1, 4)))
-    return f"{text}{invisible_salt}"
 
 
 def _format_send_error(e: Exception) -> str:
@@ -368,21 +356,16 @@ class BroadcastManager:
                             group["group_id"],
                             group.get("username"),
                         )
-                        # Telegram spam filtriga tushmaslik uchun matnni har xil qilish
-                        unique_text = apply_anti_flood_variation(message_text)
                         await tm.send_message_to_group(
                             account["session_string"],
                             account["phone"],
                             group["group_id"],
-                            unique_text,
+                            message_text,
                             group.get("username"),
                         )
                         logger.info(
                             f"[{task_id}] {account['phone']} -> {group['title']}: yuborildi"
                         )
-                        # Tabiiy, insoniy oraliq (3 dan 6 soniyagacha tasodifiy kutish)
-                        delay = random.uniform(3.0, 6.0)
-                        await asyncio.sleep(delay)
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
