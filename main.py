@@ -26,14 +26,18 @@ else:
 
 # Log sozlamalari
 log_file = os.getenv("LOG_FILE", "bot.log")
+from logging.handlers import RotatingFileHandler
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
     handlers=[
-        logging.FileHandler(log_file, encoding="utf-8"),
+        RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=3, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
+
+# Telethon loglarini kamaytirish (keraksiz 'Got difference' xabarlarini to'xtatish)
+logging.getLogger("telethon").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 

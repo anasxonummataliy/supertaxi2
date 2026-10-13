@@ -44,7 +44,12 @@ def _get_api_credentials() -> tuple[int, str]:
 
 def _build_client(session_string: str | None = None) -> TelegramClient:
     api_id, api_hash = _get_api_credentials()
-    return TelegramClient(StringSession(session_string or ""), api_id, api_hash)
+    return TelegramClient(
+        StringSession(session_string or ""),
+        api_id,
+        api_hash,
+        receive_updates=False,
+    )
 
 
 def _describe_sent_code(sent_code) -> dict[str, str | int | bool | None]:
