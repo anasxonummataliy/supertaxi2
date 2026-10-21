@@ -2,36 +2,37 @@
 
 Telegram bot orqali e'lonlar va guruhlarni boshqarish tizimi.
 
-Ushbu loyiha bitta kod bazasida bir vaqtning o'zida **bir nechta alohida botlarni (1-bot, 2-bot, 3-bot, 4-bot...)** (har biri o'zining mustaqil ma'lumotlar bazasi va log fayli bilan) ishga tushirishni to'liq qo'llab-quvvatlaydi.
+Ushbu loyiha bitta kod bazasida bir vaqtning o'zida **bir nechta alohida botlarni (1-bot, 2-bot, 3-bot, 4-bot, 5-bot, 6-bot, 7-bot, 8-bot, 9-bot...)** ishga tushirishni to'liq qo'llab-quvvatlaydi.
+
+### 🌐 Yagona Guruhlar Bazasi (`groups.db`)
+Barcha botlar **yagona umumiy guruhlar bazasiga (`groups.db`)** ulangan. Biror botdan yoki admin tomonidan guruh qo'shilsa yoki o'chirilsa, u barcha botlarda bir zumda yangilanadi va barcha botlar ushbu umumiy guruhlarga e'lonlar tarqatishi mumkin. Akkauntlar va e'lon vazifalari esa har bir botning o'z alohida bazasida (`bot1.db`, `bot2.db`, ...) mustaqil saqlanadi.
 
 ---
 
 ## 🚀 Sozlash va ishga tushirish
 
-Har bir bot uchun o'zining alohida `.env` konfiguratsiya fayli yaratiladi:
+Har bir bot uchun o'zining alohida `.env` konfiguratsiya fayli mavjud:
 
-| Bot | Misol fayl | Asl fayl | Baza fayli | Log fayli |
-| :--- | :--- | :--- | :--- | :--- |
-| **1-Bot** | `.env.bot1.example` | `.env.bot1` | `bot1.db` | `bot1.log` |
-| **2-Bot** | `.env.bot2.example` | `.env.bot2` | `bot2.db` | `bot2.log` |
-| **3-Bot** | `.env.bot3.example` | `.env.bot3` | `bot3.db` | `bot3.log` |
-| **4-Bot** | `.env.bot4.example` | `.env.bot4` | `bot4.db` | `bot4.log` |
+| Bot | Misol fayl | Asl fayl | Akkauntlar bazasi | Guruhlar bazasi | Log fayli |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1-Bot** | `.env.bot1.example` | `.env.bot1` | `bot1.db` | `groups.db` | `bot1.log` |
+| **2-Bot** | `.env.bot2.example` | `.env.bot2` | `bot2.db` | `groups.db` | `bot2.log` |
+| **3-Bot** | `.env.bot3.example` | `.env.bot3` | `bot3.db` | `groups.db` | `bot3.log` |
+| **4-Bot** | `.env.bot4.example` | `.env.bot4` | `bot4.db` | `groups.db` | `bot4.log` |
+| **5-Bot** | `.env.bot5.example` | `.env.bot5` | `bot5.db` | `groups.db` | `bot5.log` |
+| **6-Bot** | `.env.bot6.example` | `.env.bot6` | `bot6.db` | `groups.db` | `bot6.log` |
+| **7-Bot** | `.env.bot7.example` | `.env.bot7` | `bot7.db` | `groups.db` | `bot7.log` |
+| **8-Bot** | `.env.bot8.example` | `.env.bot8` | `bot8.db` | `groups.db` | `bot8.log` |
+| **9-Bot** | `.env.bot9.example` | `.env.bot9` | `bot9.db` | `groups.db` | `bot9.log` |
 
-### 1. Fayllarni nusxalash va to'ldirish:
-```bash
-cp .env.bot1.example .env.bot1
-cp .env.bot2.example .env.bot2
-cp .env.bot3.example .env.bot3
-cp .env.bot4.example .env.bot4
-```
-Har bir faylga tegishli `BOT_TOKEN`, `ADMIN_IDS`, `API_ID`, `API_HASH` ma'lumotlarini kiriting.
+Har bir `.env.bot*` fayliga tegishli `BOT_TOKEN`, `ADMIN_IDS`, `API_ID`, `API_HASH` ma'lumotlarini kiriting.
 
 ---
 
 ## ▶️ Ishga tushirish usullari:
 
 ### 1-usul: Barcha botlarni birdaniga ishga tushirish (`run_all.py` orqali)
-Mavjud barcha `.env.bot*` fayllarni avtomatik topib, barchasini parallel ishga tushiradi:
+Mavjud barcha to'ldirilgan `.env.bot*` fayllarni avtomatik topib, barchasini parallel ishga tushiradi:
 ```bash
 python run_all.py
 ```
@@ -39,17 +40,10 @@ python run_all.py
 
 ### 2-usul: Har bir botni alohida terminalda ishga tushirish
 ```bash
-# 1-bot:
 python main.py .env.bot1
-
-# 2-bot:
 python main.py .env.bot2
-
-# 3-bot:
-python main.py .env.bot3
-
-# 4-bot:
-python main.py .env.bot4
+python main.py .env.bot5
+# va h.k.
 ```
 
 ---
@@ -61,30 +55,29 @@ Loyiha papkasida tayyor service fayllari mavjud:
 - `supertaxi_bot2.service`
 - `supertaxi_bot3.service`
 - `supertaxi_bot4.service`
+- `supertaxi_bot5.service`
+- `supertaxi_bot6.service`
+- `supertaxi_bot7.service`
+- `supertaxi_bot8.service`
+- `supertaxi_bot9.service`
 
 ### Serverga o'rnatish va ishga tushirish:
 ```bash
-# Service fayllarini tizim papkasiga nusxalash
-sudo cp supertaxi_bot1.service /etc/systemd/system/
-sudo cp supertaxi_bot2.service /etc/systemd/system/
-sudo cp supertaxi_bot3.service /etc/systemd/system/
-sudo cp supertaxi_bot4.service /etc/systemd/system/
+# Yangi service fayllarini tizim papkasiga nusxalash
+sudo cp supertaxi_bot*.service /etc/systemd/system/
 
 # Tizimni yangilash va xizmatlarni yoqish
 sudo systemctl daemon-reload
-sudo systemctl enable --now supertaxi_bot1 supertaxi_bot2 supertaxi_bot3 supertaxi_bot4
+sudo systemctl enable --now supertaxi_bot5 supertaxi_bot6 supertaxi_bot7 supertaxi_bot8 supertaxi_bot9
 ```
 
 ### Holatni tekshirish:
 ```bash
-sudo systemctl status supertaxi_bot1 supertaxi_bot2 supertaxi_bot3 supertaxi_bot4
+sudo systemctl status supertaxi_bot5 supertaxi_bot6 supertaxi_bot7 supertaxi_bot8 supertaxi_bot9
 ```
 
 ### Loglarni jonli kuzatish:
 ```bash
-# 1-bot loglari:
-tail -f bot1.log
-
-# 3-bot loglari:
-tail -f bot3.log
+tail -f bot5.log
+tail -f bot6.log
 ```

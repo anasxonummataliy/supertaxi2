@@ -11,24 +11,31 @@ env/
 !.env.bot2.example
 !.env.bot3.example
 !.env.bot4.example
+!.env.bot5.example
+!.env.bot6.example
+!.env.bot7.example
+!.env.bot8.example
+!.env.bot9.example
 
 # Telethon sessiyalar va jurnallar
 *.session
 *.session-journal
 *.db-journal
 *.log
-bot.log
-bot1.log
-bot2.log
-bot3.log
-bot4.log
+bot*.log
 
-# Baza fayllari (bot1.db, bot2.db, bot3.db, bot4.db)
+# Baza fayllari
 *.db
+!groups.db
 !bot1.db
 !bot2.db
 !bot3.db
 !bot4.db
+!bot5.db
+!bot6.db
+!bot7.db
+!bot8.db
+!bot9.db
 
 __pycache__/
 *.pyc

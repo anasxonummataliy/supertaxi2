@@ -48,7 +48,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.session.aiohttp import AiohttpSession
 
-from database.db import init_db, reset_running_tasks, get_db_path
+from database.db import init_db, reset_running_tasks, get_db_path, get_groups_db_path
 from handlers import accounts, broadcast, groups, menu
 from keyboards.inline import main_menu_keyboard
 from services.broadcaster import BroadcastManager
@@ -64,6 +64,7 @@ async def main():
     logger.info(f"Ishga tushirilmoqda...")
     logger.info(f"-> Konfiguratsiya fayli: {env_path}")
     logger.info(f"-> Ma'lumotlar bazasi:  {db_path}")
+    logger.info(f"-> Guruhlar bazasi:     {get_groups_db_path()}")
     logger.info(f"-> Log fayli:           {log_file}")
 
     await init_db()
